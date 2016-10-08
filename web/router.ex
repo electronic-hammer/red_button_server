@@ -5,7 +5,9 @@ defmodule RedButtonServer.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/api", RedButtonServer do
+  scope "/", RedButtonServer do
     pipe_through :api
+
+    get "/deploy", DeployController, :index
   end
 end
