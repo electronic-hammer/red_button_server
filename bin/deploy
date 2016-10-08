@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+for p in "$@"; do
+  case $p in
+    --env=*)
+      env=${p##*=}
+      ;;
+    --host=*)
+      host=${p##*=}
+      ;;
+    --user=*)
+      user=${p##*=}
+      ;;
+    --rev=*)
+      rev=${p##*=}
+      ;;
+    --branch=*)
+      branch=${p##*=}
+      ;;
+    --split-bee-start=*)
+      bee_split_start=${p##*=}
+      ;;
+    --stop-wait-timeout=*)
+      stop_wait_timeout=${p##*=}
+      ;;
+    --haproxy-port=*)
+      haproxy_port=${p##*=}
+      ;;
+    --haproxy-stat-port=*)
+      haproxy_stat_port=${p##*=}
+      ;;
+    --skip-revision-write)
+      skip_revision_write=1
+      ;;
+  esac
+done
+
+user=${user:-aviasales}
+bee_split_start=${bee_split_start:-5}
+stop_wait_timeout=${stop_wait_timeout:-60}
+write_revision=$(( ${skip_revision_write:-0} ^ 1 ))
+
+if [[ -z "$host" || -z "$env" ]]; then
+  echo 'Usage: '$0' --host=lxc2.int.avs.io --env=[staging|production] optional_arugments...'
+  echo
+  echo 'Where optional_arugments is:'
+  echo '  --host (required)'
+  echo '    Deploy on this host'
+  echo
+  echo ' --env (required)'
+  echo '    Available environments: staging, production.'
+  echo
+  echo '  --user'
+  echo '    Remote host user to deploy with. Default: aviasales.'
+  echo
+  echo '  --branch'
+  echo '   You can omit this argument. Default: production for production, master for staging.'
+  echo
+  echo '  --rev'
+  echo '    Revision for docker image tagging. Default: lsat commit.'
+  echo
+  echo '  --split-bee-start'
+  echo '    Restart bees by small groups to avoid all kill on node. Default: 5.'
+  echo
+  echo '  --wait-start-timeout'
+  echo '    Timeout to wait before send kill -9 to stopping container. Default: 60.'
+  echo
+  echo '  --haproxy-port'
+  echo '    Entry port for load balancing with haproxy. Default: 80'
+  echo
+  echo '  --haproxy-stat-port'
+  echo '    Port for haproxy stats web interface. Default: 22002'
+  echo
+  echo '  --skip-revision-write'
+  echo '    Skip revision change on server after deploy. Default: not set'
+  exit 1
+fi
+
+# Get services to build
+cluster_config="$(dirname $0)/cluster.yml"
+cfg=$(cat $cluster_config | grep ^$host: | cut -d':' -f2 | tr -d ' ')
+
+if [[ -z "$cfg" ]]; then
+  echo "Cant find configuration for host: $host. Check cluster.yml."
+  exit 1
+fi
+services=$(cat $cluster_config | grep ^$cfg: | cut -d ':' -f2)
+
+# Use as constant prod not prod and production both
+if [[ "$env" =~ ^prod ]]; then
+  env="prod"
+fi
+
+# Get needed branch
+git_branch=${branch:-"master"}
+if [[ -z "$branch" && "$env" =~ ^prod ]]; then
+  git_branch="production"
+fi
+echo $git_branch
+
+# First check known hosts
+cat ~/.ssh/known_hosts | grep $host || ssh-keyscan $host >> ~/.ssh/known_hosts
+
+exec ssh -AT $user@$host <<EOF
+  set -e
+  (
+    set -x
+    # which curl
+    which git
+  ) >/dev/null
+
+  test ! -d ~/.deploy && mkdir ~/.deploy
+  cd ~/.deploy
+  if [[ ! -d yasen ]]; then
+    cat ~/.ssh/known_hosts | grep github.com || ssh-keyscan github.com >> ~/.ssh/known_hosts
+    git clone -q git@github.com:KosyanMedia/yasen.git
+  fi
+  cd yasen && git fetch -p
+  git checkout -f $git_branch && git reset --hard origin/$git_branch
+  git pull --rebase origin $git_branch
+
+  ENV=$env docker/scale $services > docker/docker-compose.$env.yml
+  ENV=$env REVISION=$rev WRITE_REVISION=$write_revision \
+    BEE_SPLIT_START=$bee_split_start \
+    STOP_WAIT_TIMEOUT=$stop_wait_timeout \
+    HAPROXY_PORT=$haproxy_port HAPROXY_STAT_PORT=$haproxy_stat_port \
+    exec docker/service up
+EOF
+
+echo "Deploy to $user@$host with environment $env and git branch $git_branch finished."

@@ -1,0 +1,30 @@
+zoo0.int.avs.io: production-master
+zoo1.int.avs.io: production
+zoo2.int.avs.io: production
+zoo3.int.avs.io: production
+zoo4.int.avs.io: production
+zoo5.int.avs.io: production
+zoo6.int.avs.io: production
+zoo7.int.avs.io: production
+zoo8.int.avs.io: production
+zoo9.int.avs.io: production
+zoo10.int.avs.io: production
+zoo11.int.avs.io: production
+zoo12.int.avs.io: production
+zoo13.int.avs.io: production
+zoo14.int.avs.io: production
+zoo15.int.avs.io: production
+zoo16.int.avs.io: production
+zoo17.int.avs.io: production
+zoo18.int.avs.io: production
+zoo19.int.avs.io: production
+zoo20.int.avs.io: production
+zoo21.int.avs.io: production
+zoo22.int.avs.io: production
+zoo23.int.avs.io: production
+zoo24.int.avs.io: production
+lxc2.int.avs.io: staging
+
+production-master: bee=1 ant=2 ant_low=2 ant_high=2 ant_piston=2 watcher queue deploy haproxy chameleon=4 ereb ereb_fetcher task_runner ipblock throttler centipede bind
+production: bee=16 ant=6 ant_low=6 ant_high=4 ant_piston=2 watcher queue sync deploy haproxy bind
+staging: bee=4 ant=2 ant_low=2 ant_high=2 ant_piston=2 watcher queue redis deploy haproxy bind centipede
